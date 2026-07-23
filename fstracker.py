@@ -27,7 +27,7 @@ def send_owner_alert_email(owner_email, wo_num, parts, hold_eta, reason):
         sender_email = st.secrets["SMTP_EMAIL"]
         sender_password = st.secrets["SMTP_PASSWORD"]
     except Exception:
-        return False, "Missing SMTP credentials in .streamlit/secrets.toml!"
+        return False, "Missing SMTP credentials in secrets!"
 
     SMTP_SERVER = "smtp.gmail.com"
     SMTP_PORT = 587
@@ -72,7 +72,7 @@ WO Parts Tracker Automation System
         return False, f"SMTP Error: {str(e)}"
 
 # -------------------------------------------------------------------
-# GMAIL / GOOGLE AUTHENTICATION GATEWAY (TUNNEL FRIENDLY)
+# GMAIL / GOOGLE AUTHENTICATION GATEWAY
 # -------------------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -100,7 +100,7 @@ if not is_oidc_logged_in and not st.session_state.authenticated:
         if hasattr(st, "login"):
             if st.button("🔴 Sign in with Google", type="primary", use_container_width=True):
                 try:
-                    st.login("google")
+                    st.login()  # Uses the default [auth] secrets section
                 except Exception as e:
                     st.error(f"⚠️ Google Login error: {str(e)}")
 
