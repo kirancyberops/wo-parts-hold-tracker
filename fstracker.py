@@ -72,37 +72,75 @@ WO Parts Tracker Automation System
         return False, f"SMTP Error: {str(e)}"
 
 # -------------------------------------------------------------------
-# GMAIL / GOOGLE AUTHENTICATION GATEWAY
+# GMAIL / GOOGLE AUTHENTICATION GATEWAY (Google Identity Web SDK)
 # -------------------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 
-# Check Streamlit OIDC user state safely
-is_oidc_logged_in = False
-try:
-    is_oidc_logged_in = hasattr(st, "user") and getattr(st.user, "is_logged_in", False)
-except Exception:
-    is_oidc_logged_in = False
+# Handle query parameter authentication after Google sign-in
+params = st.query_params
+if "user_email" in params:
+    st.session_state.authenticated = True
+    st.session_state.user_email = params["user_email"]
 
-if not is_oidc_logged_in and not st.session_state.authenticated:
+if not st.session_state.authenticated:
     st.markdown("""
         <div style="background-color: #111827; padding: 30px; border-radius: 16px; border: 1px solid #1F2937; max-width: 450px; margin: 30px auto 20px auto; text-align: center;">
             <h2 style="color: #F8FAFC; margin-bottom: 5px;">🔒 Security Gateway</h2>
             <p style="color: #9CA3AF; font-size: 14px; margin-bottom: 5px;">Work Order & Parts Hold Tracker</p>
-            <p style="color: #6B7280; font-size: 12px;">Sign in with your Google / Gmail account to access the portal.</p>
+            <p style="color: #6B7280; font-size: 12px; margin-bottom: 20px;">Sign in with your Google / Gmail account to access the portal.</p>
         </div>
     """, unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        if hasattr(st, "login"):
-            if st.button("🔴 Sign in with Google", type="primary", use_container_width=True):
-                try:
-                    st.login()  # Uses the default [auth] secrets section
-                except Exception as e:
-                    st.error(f"⚠️ Google Login error: {str(e)}")
+        # Official Google Sign-In JS Component
+        google_btn_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script src="https://accounts.google.com/gsi/client" async defer></script>
+            <script>
+                function parseJwt (token) {
+                    var base64Url = token.split('.')[1];
+                    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    return JSON.parse(jsonPayload);
+                }
+
+                function handleCredentialResponse(response) {
+                    const responsePayload = parseJwt(response.credential);
+                    const userEmail = responsePayload.email;
+                    
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('user_email', userEmail);
+                    window.parent.location.href = url.href;
+                }
+            </script>
+        </head>
+        <body style="background: transparent; display: flex; justify-content: center; align-items: center; margin: 0;">
+            <div id="g_id_onload"
+                 data-client_id="677402173124-ubf23pblvjk5icddcrk7l37dqe3cuh6l.apps.googleusercontent.com"
+                 data-callback="handleCredentialResponse"
+                 data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-size="large"
+                 data-theme="outline"
+                 data-text="sign_in_with"
+                 data-shape="rectangular"
+                 data-logo_alignment="left"
+                 data-width="280">
+            </div>
+        </body>
+        </html>
+        """
+        components.html(google_btn_html, height=60)
 
         st.divider()
 
@@ -118,7 +156,7 @@ if not is_oidc_logged_in and not st.session_state.authenticated:
 
     st.stop()
 
-current_user_email = st.user.email if is_oidc_logged_in else st.session_state.user_email
+current_user_email = st.session_state.user_email
 
 # -------------------------------------------------------------------
 # DATA HANDLING
@@ -202,13 +240,9 @@ with top_col1:
 with top_col2:
     st.caption(f"👤 Logged in: **{current_user_email}**")
     if st.button("Logout", type="secondary", key="logout_btn"):
-        if hasattr(st, "logout"):
-            try:
-                st.logout()
-            except Exception:
-                pass
         st.session_state.authenticated = False
         st.session_state.user_email = ""
+        st.query_params.clear()
         st.rerun()
 
 clock_html = """
